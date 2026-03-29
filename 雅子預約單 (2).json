@@ -1,0 +1,810 @@
+{
+  "name": "雅子預約單",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// 1. 抓取 OpenAI 吐出來的那串 \"長得像 JSON 的文字\"\n// 注意：這裡的路徑是根據你剛剛貼給我的 output 結構抓的\nconst aiText = $input.first().json.output[0].content[0].text;\n\n// 2. 用 JSON.parse 把文字 \"拆開\" 變成真正的物件\nconst parsedData = JSON.parse(aiText);\n\n// 3. 回傳乾淨的資料\nreturn parsedData;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        -256
+      ],
+      "id": "897a2fe1-0d66-4039-af47-6970075e72a5",
+      "name": "整理訂單資訊"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=你是一個專業的日本民宿訂房助理。你的任務是從使用者的非結構化文字中提取訂房資訊，並嚴格輸出為 JSON 格式。\n\n請分析使用者的文字，提取以下欄位。如果文字中沒有該資訊，請留空字串 \"\"，不要自己編造。\n\n需要提取的欄位 (JSON Key)：\n- GuestName: 姓名\n- GuestPhone: 電話 (保留原始格式)\n- GuestEmail: Email\n- CheckInDate: 入住日期 (請標準化為 YYYY/MM/DD 格式，例如 2025/03/19)\n- CheckOutDate: 退房日期 (請標準化為 YYYY/MM/DD 格式)\n- Nights: 住宿天數 (如果是日期範圍，請自動計算晚數；如果是數字直接填入)\n- Adults: 成人人數 (只填數字)\n- Children: 兒童人數 (只填數字，若未提及填 0)\n- PropertyPrediction: 根據文字內容推測是哪間民宿 (選項: 池袋鑫之屋, 淺草千之森, 高田馬場, 笹塚, 池袋銀婚, 新宿中落合,押上～晴空緣)。如果無法判斷，填 \"Unknown\"。\n\n使用者文字範例：\n\"預約日期：3/19-3/26, 2人, 劉彥昕, 0928434643\"\n\n請直接回傳 JSON 物件，不要包含 Markdown 格式 (```json ... ```)\n\n今年是 2026 年"
+            },
+            {
+              "content": "={{ $('Switch').item.json.body.events[0].message.text }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        128,
+        -256
+      ],
+      "id": "a604ed0f-3a48-49af-b9f8-db48269bce76",
+      "name": "分析訊息資料",
+      "credentials": {
+        "openAiApi": {
+          "id": "QLVuVygWA7fpPkOl",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "21b98479-93c0-42dd-982f-9d0844296691",
+              "name": "review_url",
+              "value": "={{ \"https://sam.zeabur.app/form/180de9f2-6049-4056-a879-79bf1566eb8c\" \n+ \"?\" + encodeURIComponent(\"客人姓名\") + \"=\" + encodeURIComponent($json.GuestName)\n+ \"&\" + encodeURIComponent(\"客人電話\") + \"=\" + encodeURIComponent($json.GuestPhone.toString())\n+ \"&\" + encodeURIComponent(\"email\") + \"=\" + encodeURIComponent($json.GuestEmail)\n+ \"&\" + encodeURIComponent(\"入住日期\") + \"=\" + encodeURIComponent($json.CheckInDate)\n+ \"&\" + encodeURIComponent(\"退房日期\") + \"=\" + encodeURIComponent($json.CheckOutDate)\n+ \"&\" + encodeURIComponent(\"住宿天數\") + \"=\" + encodeURIComponent($json.Nights)\n+ \"&\" + encodeURIComponent(\"成人人數\") + \"=\" + encodeURIComponent($json.Adults)\n+ \"&\" + encodeURIComponent(\"兒童人數\") + \"=\" + encodeURIComponent($json.Children)\n+ \"&\" + encodeURIComponent(\"選擇民宿\") + \"=\" + encodeURIComponent($json.PropertyPrediction)\n+ \"&\" + encodeURIComponent(\"LineID\") + \"=\" + encodeURIComponent($('Webhook').item.json.body.events[0].source.userId) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        608,
+        -256
+      ],
+      "id": "b456c141-d7b1-45be-b60f-eea2cbcb5f6e",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line-order",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        -144
+      ],
+      "id": "7320137f-0585-4504-a2c6-54a49a26c365",
+      "name": "Webhook",
+      "webhookId": "2e2d9f37-2655-43e9-a40d-95ab2eef0fed"
+    },
+    {
+      "parameters": {
+        "replyToken": "={{ $('Webhook').item.json.body.events[0].replyToken }}",
+        "messages": {
+          "values": [
+            {
+              "altText": "📋 訂單草稿已生成，請核對",
+              "flexJson": "={\n  \"type\": \"bubble\",\n  \"size\": \"mega\",\n  \"header\": {\n    \"type\": \"box\",\n    \"layout\": \"vertical\",\n    \"contents\": [\n      {\n        \"type\": \"text\",\n        \"text\": \"📋 預約單資料核對\",\n        \"weight\": \"bold\",\n        \"color\": \"#ffffff\",\n        \"size\": \"lg\"\n      }\n    ],\n    \"backgroundColor\": \"#4682b4\",\n    \"paddingAll\": \"20px\"\n  },\n  \"body\": {\n    \"type\": \"box\",\n    \"layout\": \"vertical\",\n    \"contents\": [\n      {\n        \"type\": \"text\",\n        \"text\": \"AI 已提取房客資訊，請點擊按鈕確認細節與房價，確認無誤後按送出。\",\n        \"size\": \"sm\",\n        \"color\": \"#666666\",\n        \"wrap\": true\n      },\n      {\n        \"type\": \"separator\",\n        \"margin\": \"lg\"\n      },\n      {\n        \"type\": \"box\",\n        \"layout\": \"vertical\",\n        \"margin\": \"lg\",\n        \"spacing\": \"sm\",\n        \"contents\": [\n          {\n            \"type\": \"box\",\n            \"layout\": \"baseline\",\n            \"spacing\": \"sm\",\n            \"contents\": [\n              {\n                \"type\": \"text\",\n                \"text\": \"👤 姓名\",\n                \"color\": \"#aaaaaa\",\n                \"size\": \"sm\",\n                \"flex\": 1\n              },\n              {\n                \"type\": \"text\",\n                \"text\": \"{{ $('整理訂單資訊').item.json.GuestName }}\",\n                \"wrap\": true,\n                \"color\": \"#666666\",\n                \"size\": \"sm\",\n                \"flex\": 4\n              }\n            ]\n          },\n          {\n            \"type\": \"box\",\n            \"layout\": \"baseline\",\n            \"spacing\": \"sm\",\n            \"contents\": [\n              {\n                \"type\": \"text\",\n                \"text\": \"📞 電話\",\n                \"color\": \"#aaaaaa\",\n                \"size\": \"sm\",\n                \"flex\": 1\n              },\n              {\n                \"type\": \"text\",\n                \"text\": \"{{ $('整理訂單資訊').item.json.GuestPhone }}\",\n                \"wrap\": true,\n                \"color\": \"#666666\",\n                \"size\": \"sm\",\n                \"flex\": 4\n              }\n            ]\n          }\n        ]\n      }\n    ]\n  },\n  \"footer\": {\n    \"type\": \"box\",\n    \"layout\": \"vertical\",\n    \"spacing\": \"sm\",\n    \"contents\": [\n      {\n        \"type\": \"button\",\n        \"style\": \"primary\",\n        \"height\": \"md\",\n        \"action\": {\n          \"type\": \"uri\",\n          \"label\": \"✍️ 開始核對並產單\",\n          \"uri\": \"{{ $json.review_url }}\"\n        },\n        \"color\": \"#4682b4\"\n      }\n    ],\n    \"paddingAll\": \"20px\"\n  }\n}",
+              "type": "flex"
+            }
+          ]
+        }
+      },
+      "type": "@aotoki/n8n-nodes-line-messaging.lineMessaging",
+      "typeVersion": 1,
+      "position": [
+        800,
+        -256
+      ],
+      "id": "43c99c3f-e93c-4f89-ac76-1e1abee9b82f",
+      "name": "Line Messaging",
+      "credentials": {
+        "lineMessagingApi": {
+          "id": "IJrqXJYe5PpfQP9R",
+          "name": "雅子預定單"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.events[0].type }}",
+                    "rightValue": "message",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "5d169124-8c32-4d73-a684-c44a8d456df4"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "text"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "8f92c859-5b28-43af-9629-10f69028da34",
+                    "leftValue": "={{ $json.body.events[0].type }}",
+                    "rightValue": "postback",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "postback"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -256,
+        -144
+      ],
+      "id": "ff1cd1a7-19ae-4ea6-980c-03786f2e8558",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('解析按鈕傳回的訂單資料').item.json.fileId }}",
+          "mode": "id"
+        },
+        "options": {
+          "googleFileConversion": {
+            "conversion": {
+              "docsToFormat": "application/pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        320,
+        -32
+      ],
+      "id": "eca3e899-14c2-46f5-b5d2-7139579016af",
+      "name": "Download file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "TNYAAoRQrVy4fAn0",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('解析按鈕傳回的訂單資料').item.json.email }}",
+        "subject": "=【東京訂房預約單】您的預約已確認 - {{ $('解析按鈕傳回的訂單資料').item.json.name }}",
+        "emailType": "text",
+        "message": "感謝您的預訂，附件為您的預訂單 ，再請您確認",
+        "options": {
+          "appendAttribution": false,
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        -32
+      ],
+      "id": "d7336cd3-b58d-4087-9645-e0519dd0b659",
+      "name": "Send a message",
+      "webhookId": "3d7ab173-6979-419a-8f07-90e53cb76eae",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "p9SYXejpfi2fa1i7",
+          "name": "雅子的訂單"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteFile",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('解析按鈕傳回的訂單資料').item.json.fileId }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        672,
+        -32
+      ],
+      "id": "6d9ba512-df01-4499-a465-0cd59f5c40a8",
+      "name": "Delete a file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "TNYAAoRQrVy4fAn0",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "to": "={{ $('Webhook').item.json.body.events[0].source.userId }}",
+        "messages": {
+          "values": [
+            {
+              "text": "=✅ 訂單 PDF 已成功寄給 {{ $('解析按鈕傳回的訂單資料').item.json.name }}"
+            }
+          ]
+        }
+      },
+      "type": "@aotoki/n8n-nodes-line-messaging.lineMessaging",
+      "typeVersion": 1,
+      "position": [
+        832,
+        -32
+      ],
+      "id": "88b0413e-ee03-4ebe-84af-c56922e8206c",
+      "name": "Line Messaging1",
+      "credentials": {
+        "lineMessagingApi": {
+          "id": "IJrqXJYe5PpfQP9R",
+          "name": "雅子預定單"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "formTitle": "民宿訂單審核",
+        "formDescription": "請確認 AI 抓取的資料是否正確，並選擇民宿與填寫金額",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "選擇民宿",
+              "fieldType": "dropdown",
+              "defaultValue": "淺草千之森",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "淺草千之森"
+                  },
+                  {
+                    "option": "鑫之屋"
+                  },
+                  {
+                    "option": "銀婚屋"
+                  },
+                  {
+                    "option": "高田馬場"
+                  },
+                  {
+                    "option": "笹塚stay"
+                  },
+                  {
+                    "option": "新宿中落合"
+                  },
+                  {
+                    "option": "押上～晴空緣"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "預約號碼"
+            },
+            {
+              "fieldLabel": "客人姓名",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "客人電話",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "email"
+            },
+            {
+              "fieldLabel": "入住日期"
+            },
+            {
+              "fieldLabel": "退房日期"
+            },
+            {
+              "fieldLabel": "住宿天數",
+              "fieldType": "number"
+            },
+            {
+              "fieldLabel": "成人人數",
+              "fieldType": "number"
+            },
+            {
+              "fieldLabel": "兒童人數",
+              "fieldType": "number"
+            },
+            {
+              "fieldLabel": "住宿費",
+              "fieldType": "number"
+            },
+            {
+              "fieldLabel": "清潔費",
+              "fieldType": "number"
+            },
+            {
+              "fieldLabel": "LineID"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.3,
+      "position": [
+        -320,
+        192
+      ],
+      "id": "80a5ba65-5e72-49d2-9271-78370d0622be",
+      "name": "On form submission",
+      "webhookId": "180de9f2-6049-4056-a879-79bf1566eb8c"
+    },
+    {
+      "parameters": {
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.file_id }}",
+          "mode": "id"
+        },
+        "name": "={{ $('On form submission').item.json[\"客人姓名\"] }}_訂單",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        160,
+        192
+      ],
+      "id": "47ba71f4-e7f7-4ac8-ba24-39c9b4038477",
+      "name": "Copy file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "TNYAAoRQrVy4fAn0",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "replaceAll",
+              "text": "{{GuestName}}",
+              "replaceText": "={{ $('On form submission').item.json[\"客人姓名\"] }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{GuestPhone}}",
+              "replaceText": "={{ $('On form submission').item.json[\"客人電話\"].toString() }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{GuestEmail}}",
+              "replaceText": "={{ $('On form submission').item.json[\"email\"] }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{BookingNo}}",
+              "replaceText": "={{ $('根據民宿匹配模板與編號').item.json.generatedBookingNo }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{CheckInDate}}",
+              "replaceText": "={{ DateTime.fromFormat($('On form submission').item.json[\"入住日期\"], 'yyyy/MM/dd').toFormat('yyyy年MM月dd日') }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{CheckOutDate}}",
+              "replaceText": "={{ DateTime.fromFormat($('On form submission').item.json[\"退房日期\"], 'yyyy/MM/dd').toFormat('yyyy年MM月dd日') + \"(～10:00)\" }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{Nights}}",
+              "replaceText": "={{ $('On form submission').item.json[\"住宿天數\"].toString() }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{Adults}}",
+              "replaceText": "={{ $('On form submission').item.json[\"成人人數\"].toString() }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{Children}}",
+              "replaceText": "={{ $('On form submission').item.json[\"兒童人數\"].toString() }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{CleaningFee}",
+              "replaceText": "={{ $('On form submission').item.json[\"清潔費\"].toString() }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{RoomRate}}",
+              "replaceText": "={{ $('On form submission').item.json[\"住宿費\"].toString() }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{TotalAmount}}",
+              "replaceText": "={{ (Number($('On form submission').item.json[\"住宿費\"] || 0) + Number($('On form submission').item.json[\"清潔費\"] || 0)).toString() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        384,
+        192
+      ],
+      "id": "f8b56559-eef2-484e-a2a2-f21950d28598",
+      "name": "填上資料",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "ucQzAMeNwIAoPl90",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "to": "={{ $('On form submission').item.json.LineID }}",
+        "messages": {
+          "values": [
+            {
+              "altText": "🎉 訂單建立成功！請點擊確認",
+              "flexJson": "={\n  \"type\": \"bubble\",\n  \"size\": \"mega\",\n  \"header\": {\n    \"type\": \"box\",\n    \"layout\": \"vertical\",\n    \"contents\": [\n      {\n        \"type\": \"text\",\n        \"text\": \"🎉 訂單建立成功！\",\n        \"weight\": \"bold\",\n        \"color\": \"#ffffff\",\n        \"size\": \"lg\"\n      }\n    ],\n    \"backgroundColor\": \"#20b2aa\",\n    \"paddingAll\": \"20px\"\n  },\n  \"body\": {\n    \"type\": \"box\",\n    \"layout\": \"vertical\",\n    \"contents\": [\n      {\n        \"type\": \"text\",\n        \"text\": \"請先檢查檔案，沒問題再按寄出\",\n        \"size\": \"xs\",\n        \"color\": \"#aaaaaa\",\n        \"margin\": \"md\"\n      },\n      {\n        \"type\": \"box\",\n        \"layout\": \"vertical\",\n        \"contents\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"📄 檔案名稱\",\n            \"size\": \"xs\",\n            \"color\": \"#aaaaaa\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": \"{{ $('Copy file').item.json.name }}\",\n            \"weight\": \"bold\",\n            \"size\": \"sm\",\n            \"wrap\": true,\n            \"color\": \"#333333\"\n          }\n        ],\n        \"margin\": \"md\"\n      },\n      {\n        \"type\": \"box\",\n        \"layout\": \"vertical\",\n        \"contents\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"📧 準備寄給\",\n            \"size\": \"xs\",\n            \"color\": \"#aaaaaa\"\n          },\n         {\n  \"type\": \"text\",\n  \"text\": \"{{ $('On form submission').item.json['email'] || '未提供 Email' }}\",\n  \"size\": \"sm\",\n  \"color\": \"#333333\",\n  \"weight\": \"bold\",\n  \"wrap\": true\n}\n        ],\n        \"margin\": \"md\"\n      },\n      {\n        \"type\": \"separator\",\n        \"margin\": \"lg\"\n      },\n      {\n        \"type\": \"box\",\n        \"layout\": \"vertical\",\n        \"contents\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"總金額 (住宿+清潔)\",\n            \"size\": \"xs\",\n            \"color\": \"#aaaaaa\",\n            \"align\": \"center\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": \"¥ {{ (Number($('On form submission').item.json['住宿費'] || 0) + Number($('On form submission').item.json['清潔費'] || 0)).toLocaleString() }}\",\n            \"weight\": \"bold\",\n            \"size\": \"3xl\",\n            \"color\": \"#ff5500\",\n            \"align\": \"center\",\n            \"margin\": \"sm\"\n          }\n        ],\n        \"margin\": \"xl\"\n      }\n    ]\n  },\n  \"footer\": {\n    \"type\": \"box\",\n    \"layout\": \"vertical\",\n    \"spacing\": \"sm\",\n    \"contents\": [\n      {\n        \"type\": \"button\",\n        \"style\": \"secondary\",\n        \"height\": \"sm\",\n        \"action\": {\n          \"type\": \"uri\",\n          \"label\": \"👁️ 查看 Google Doc\",\n          \"uri\": \"https://docs.google.com/document/d/{{ $('Copy file').item.json.id }}\"\n        },\n        \"color\": \"#e0e0e0\"\n      },\n      {\n        \"type\": \"button\",\n        \"style\": \"primary\",\n        \"height\": \"sm\",\n        \"action\": {\n          \"type\": \"postback\",\n          \"label\": \"✅ 正確無誤 (寄出並刪檔)\",\n          \"data\": \"action=confirm_send&id={{ $('Copy file').item.json.id }}&email={{ $('On form submission').item.json['email'] }}&name={{ $('On form submission').item.json['客人姓名'] }}\"\n        },\n        \"color\": \"#20b2aa\"\n      }\n    ],\n    \"paddingAll\": \"20px\"\n  }\n}",
+              "type": "flex"
+            }
+          ]
+        }
+      },
+      "type": "@aotoki/n8n-nodes-line-messaging.lineMessaging",
+      "typeVersion": 1,
+      "position": [
+        576,
+        192
+      ],
+      "id": "3c338505-8e11-468e-a1bb-199dd3d68dfe",
+      "name": "Line Messaging2",
+      "credentials": {
+        "lineMessagingApi": {
+          "id": "IJrqXJYe5PpfQP9R",
+          "name": "雅子預定單"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/chat/loading/start",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "lineMessagingApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chatId\": \"{{ $('Webhook').first().json.body.events[0].source.userId }}\",\n  \"loadingSeconds\": 20\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -32,
+        -256
+      ],
+      "id": "d62d4da6-3c4a-4d87-b619-07ff894f3887",
+      "name": "LINE 啟動載入動畫1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "4gxzrGIjwkkdc7IW",
+          "name": "SAM 減肥教練 LINE"
+        },
+        "lineMessagingApi": {
+          "id": "IJrqXJYe5PpfQP9R",
+          "name": "雅子預定單"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/chat/loading/start",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "lineMessagingApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chatId\": \"{{ $('Webhook').first().json.body.events[0].source.userId }}\",\n  \"loadingSeconds\": 20\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        144,
+        -32
+      ],
+      "id": "fa06e125-8d40-45a2-9375-50c2d6c0b8ea",
+      "name": "LINE 啟動載入動畫",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "4gxzrGIjwkkdc7IW",
+          "name": "SAM 減肥教練 LINE"
+        },
+        "lineMessagingApi": {
+          "id": "IJrqXJYe5PpfQP9R",
+          "name": "雅子預定單"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. 抓取 LINE 傳回來的 data 字串\nconst event = $input.first().json.body.events[0];\nconst dataString = event.postback.data;\nconst replyToken = event.replyToken;\n\n// 2. 手動解析資料 (因為 n8n 不支援 URLSearchParams，我們自己切字串)\n// 原本格式: \"action=confirm_send&id=123&email=abc\"\nconst params = {};\ndataString.split('&').forEach(part => {\n  const [key, value] = part.split('=');\n  if (key && value) {\n    // decodeURIComponent 是為了把網址編碼轉回中文或特殊符號\n    params[key] = decodeURIComponent(value);\n  }\n});\n\n// 3. 整理成乾淨的欄位吐出去\nreturn {\n  action: params['action'],\n  fileId: params['id'],\n  email: params['email'],\n  name: params['name'],\n  replyToken: replyToken\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        -32
+      ],
+      "id": "7b7920c3-0627-40a2-9a95-ae0cac5c1ca2",
+      "name": "解析按鈕傳回的訂單資料"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🏠 民宿設定\nconst propertyMap = {\n  \"淺草千之森\": { id: \"10yZhQRv9Om7m0zKgP-W0UB9n-6wAx1fGD9S8bq1RVew\", prefix: \"AS\" },\n  \"銀婚屋\": { id: \"1h0il0jq6V3I3Qo9fHUp2nDqjDDIZ_myd2tbc6WAQXUQ\", prefix: \"IG\" },\n  \"鑫之屋\": { id: \"1mIDTlGTukMhyxpOH_fOy2omqpN16hwDtzFGBYAJwlvE\", prefix: \"IS\" },\n  \"高田馬場\": { id: \"1LJoaFc51BKi8-Dqj1VdnVhZZ0rbdsLVgNoNzt8VZOTI\", prefix: \"TAKA\" },\n  \"笹塚stay\": { id: \"1qYZJX6fquipUxyfJ4j3HKp32h1rGqaK7pFP3yk1gC2w\", prefix: \"SAX\" },\n  \"新宿中落合\": { id: \"1lsXSXOd88y81bkYLbbpF9FIMQ00lMzfquG8HhZKljiY\", prefix: \"NAKA\" },\n  // 👇 這是新增的部分\n  \"押上～晴空緣\": { id: \"1x5It1TFJzX9N54UP9Dq7XcxVilgwcalIlVqewmdG7iM\", prefix: \"ST\" }\n};\n\nconst formData = $('On form submission').item.json;\nconst selected = formData[\"選擇民宿\"];\nconst propertyData = propertyMap[selected];\n\nif (!propertyData) {\n  throw new Error(`⚠️ 找不到民宿: \"${selected}\"`);\n}\n\n// 🛠️ 判斷號碼邏輯\nlet bookingNo = formData[\"預約號碼\"]; \n\nif (!bookingNo || bookingNo.trim() === \"\") {\n  const today = new Date();\n  const dateStr = today.getFullYear().toString() + \n                  (today.getMonth() + 1).toString().padStart(2, '0') + \n                  today.getDate().toString().padStart(2, '0');\n  bookingNo = propertyData.prefix + dateStr;\n}\n\nreturn { \n  file_id: propertyData.id,\n  generatedBookingNo: bookingNo \n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        192
+      ],
+      "id": "959b175d-9618-4fb8-9687-609f4fd717c9",
+      "name": "根據民宿匹配模板與編號"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "分析訊息資料": {
+      "main": [
+        [
+          {
+            "node": "整理訂單資訊",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "整理訂單資訊": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Line Messaging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "LINE 啟動載入動畫1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "解析按鈕傳回的訂單資料",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Delete a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete a file": {
+      "main": [
+        [
+          {
+            "node": "Line Messaging1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "根據民宿匹配模板與編號",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Copy file": {
+      "main": [
+        [
+          {
+            "node": "填上資料",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "填上資料": {
+      "main": [
+        [
+          {
+            "node": "Line Messaging2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LINE 啟動載入動畫1": {
+      "main": [
+        [
+          {
+            "node": "分析訊息資料",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LINE 啟動載入動畫": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析按鈕傳回的訂單資料": {
+      "main": [
+        [
+          {
+            "node": "LINE 啟動載入動畫",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "根據民宿匹配模板與編號": {
+      "main": [
+        [
+          {
+            "node": "Copy file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "ikezvUpxeLdkrinZ"
+  },
+  "versionId": "871cc25f-3cc1-4c0c-812c-364e6062b3f1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e79e519af1013664c5c9d7368ca2d608e3b313b0a7ad62b6441dcd118835aefa"
+  },
+  "id": "VHGCZx3xQQ3PACZq",
+  "tags": []
+}
