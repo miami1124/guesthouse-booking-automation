@@ -1,2 +1,30 @@
-# uesthouse-booking-automation
-LINE Bot × n8n 民宿預約單自動化系統
+# 🏡 民宿預約單自動化系統
+**LINE Bot × n8n × Claude AI × Word 文件生成**
+
+---
+
+## 背景與痛點
+
+民宿業主每次收到訂房資訊後，需手動將住客姓名、入住日期、人數等欄位一一複製貼上到對應民宿的 Word 預約單範本，再寄給客戶確認。7 間房型各有不同格式，流程繁瑣且容易出錯。
+
+## 解決方案
+
+打造一套以 LINE 官方帳號為入口的自動化流程：
+
+1. 業主將住客資訊貼入 LINE 官方帳號
+2. AI 自動解析訊息，識別住客資訊與對應房型
+3. 以 Flex Message 呈現資料預覽，供業主核對
+4. 按下送出後自動生成完整 Word 預約單，發送給住客
+
+## 成果
+
+- ✅ 告別手動複製貼上，人工作業時間大幅縮短
+- ✅ 減少欄位填錯、漏填的人為錯誤
+- ✅ 業主回饋：「方便很多，不用再一個一個慢慢貼了」
+
+## 技術棧
+
+`n8n` `LINE Messaging API` `LINE Flex Message` `Claude AI` `Word 文件生成` `Webhook`
+
+---
+*Built by Sam｜AI Automation Engineer*
