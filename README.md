@@ -24,7 +24,7 @@
 
 ## 技術棧
 
-`n8n` `LINE Messaging API` `LINE Flex Message` `Claude AI` `Word 文件生成` `Webhook`
+`n8n` `LINE Messaging API` `LINE Flex Message` `openai` `Word 文件生成` `Webhook`
 
 ---
 *Built by Sam｜AI Automation Engineer*
